@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        /* Base reset */
+        html,body { height:100%; margin:0; padding:0; }
+        body { background:#000; overflow:hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+
+        /* Layered full-viewport layout */
+        #layer-root {
+            position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; background:#000;
+        }
+        #layer-root > img, #layer-root > video {
+            position:absolute; left:0; top:0; width:100%; height:100%;
+            object-fit:cover; transition:opacity 520ms ease; opacity:0; pointer-events:none;
+            -webkit-user-select:none; user-select:none;
+        }
+        /* Main elements show whole image/video without cropping */
+        #img-main-1, #img-main-2, #vid-main-1, #vid-main-2 { object-fit:contain; }
+        /* Background elements fill (cover) */
+        #img-bg-1, #img-bg-2, #vid-bg-1, #vid-bg-2 { object-fit:cover; }
+        /* Background blur for bg layers */
+        #img-bg-1, #img-bg-2, #vid-bg-1, #vid-bg-2 { filter: blur(8px); transition:filter 600ms ease; }
+        /* Visible state */
+        .visible { opacity:1 !important; }
+
+        /* EXIF and settings remain available */
+        #exif-container { position:fixed; right:10px; bottom:10px; z-index:20000; }
+        #settings-container { position:fixed; right:8px; top:8px; z-index:20000; }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+
+<body>
+    <!-- Layer root holds 2 sets of bg/main pairs for crossfade -->
+    <div id="layer-root">
+        <!-- Set 1: background + main -->
+        <img id="img-bg-1" alt="background image 1" />
+        <img id="img-main-1" alt="main image 1" />
+        <video id="vid-bg-1" muted playsinline></video>
+        <video id="vid-main-1" muted playsinline></video>
+
+        <!-- Set 2: background + main -->
+        <img id="img-bg-2" alt="background image 2" />
+        <img id="img-main-2" alt="main image 2" />
+        <video id="vid-bg-2" muted playsinline></video>
+        <video id="vid-main-2" muted playsinline></video>
+    </div>
+
+    <!-- EXIF toggle / Settings (kept minimal) -->
+    <button hidden id="exif-toggle" aria-pressed="false" title="Toggle EXIF" style="position:fixed; right:10px; top:10px; z-index:9999; background:rgba(0,0,0,0.35); color:white; border:none; padding:6px 8px; border-radius:6px;">EXIF</button>
+    <div id="settings-container" style="position:fixed; right:8px; top:8px; z-index:10000; width:44px; height:44px;">
+        <button id="settings-btn" aria-expanded="false" title="設定" style="position:absolute; right:0; top:0; width:44px; height:44px; border-radius:6px; background:rgba(0,0,0,0.35); color:white; border:none; cursor:pointer; opacity:0; transition:opacity 200ms ease, transform 200ms ease; transform:scale(0.9); pointer-events:none;">⚙</button>
+    </div>
+
+    <!-- Settings popup (overlay + metadata toggles) -->
+    <div id="settings-popup" style="position:fixed; right:10px; top:56px; z-index:10001; background:rgba(20,20,24,0.95); color:#fff; border-radius:8px; padding:10px; display:none; min-width:220px; box-shadow:0 6px 18px rgba(0,0,0,0.5); font-size:13px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="settings-overlay-checkbox" />
+            <span>オーバーレイ表示</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+            <input type="checkbox" id="settings-metadata-checkbox" />
+            <span>メタデータ表示</span>
+        </label>
+        <div style="display:flex; justify-content:flex-end; margin-top:8px; gap:8px;">
+            <button id="settings-close" style="background:rgba(255,255,255,0.06); color:#fff; border:none; padding:6px 8px; border-radius:6px; cursor:pointer;">閉じる</button>
+        </div>
+    </div>
+
+    <style>
+        #settings-container:hover > #settings-btn { opacity:1 !important; transform:scale(1) !important; pointer-events:auto !important; }
+    </style>
+
+    <script async type="text/javascript" src="app.js"></script>
+</body>
+
+</html>
