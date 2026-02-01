@@ -5,16 +5,14 @@
 
 **要件**
 
-- **バックエンド**: PiGallery2（拡張機能で情報提供する `/info/` エンドポイントが必要）。
+- **バックエンド**: PiGallery2（拡張機能で提供するランダム情報取得エンドポイント `/info/` が必要）。
 - **クライアント**: Wallpaper Engine（Web 型壁紙をサポートする環境）。
-- **ブラウザライブラリ**: `exif-js` と `leaflet`（CDN で読み込まれています、`index.html` を参照）。
-
 - **ブラウザライブラリ**: `leaflet`（CDN で読み込まれています、`index.html` を参照）。
 - **追加バックエンド（Info API プロキシ）**: 本クライアントは PiGallery2 へ直接検索クエリを組み立ててアクセスするのではなく、前段に軽量なプロキシを置くことを想定しています。`app.js` の `convertinfoapiurl`（デフォルト `http://localhost:8000/info/`）はそのプロキシを叩き、JSON で PiGallery2 の Info エンドポイントのフル URL（例: `/pgapi/gallery/random/<encoded_query>/info`）を返す必要があります。
 
 Wallpaper Engine用に作成したものですが、index.htmlとapp.jsで構成された単なるwebページなので、webブラウザで開いても動作します。というかWallpaper Engineでは動画がwebmしか再生できない、GPU負荷が結構上がるなどあるのでwebブラウザで全画面表示した方がデジタルフォトフレーム動作としては良いかも。
 
-バックエンドのPiGallery2の情報API機能拡張は [pigallery2-random-info-extension](https://github.com/ohton/pigallery2-random-info-extension) を想定しています。追加バックエンド（Info API プロキシ）はPiGallery2の機能拡張にできないか検討中なので未公開です。単にクエリ部分を組み立ててjsonを返すだけなので、どんな実装でも良いです。
+バックエンドのPiGallery2のランダム情報取得エンドポイント機能拡張は [pigallery2-random-info-extension](https://github.com/ohton/pigallery2-random-info-extension) を想定しています。追加バックエンド（Info API プロキシ）はPiGallery2の機能拡張にできないか検討中なので未公開です。単にクエリ部分を組み立ててjsonを返すだけなので、どんな実装でも良いです。
 
 ```python
 qdic = json.loads(json_query)
@@ -24,16 +22,15 @@ return JsonResponse({"url": f"http://{domain}/pgapi/gallery/random/{query}"})
 
 **セットアップ**
 
-- **PiGallery2 の準備**: PiGallery2 を動作させ、同一ネットワークまたは `localhost` でアクセス可能にしておいてください。`app.js` の `convertinfoapiurl` は既定で `http://localhost:8000/info/` に設定されています。
+- **PiGallery2 の準備**: PiGallery2 を動作させ、同一ネットワークまたは `localhost` でアクセス可能にしておいてください(auth protectionはオフ)。`app.js` の `convertinfoapiurl` は既定で `http://localhost:8000/info/`
 - **API の動作確認**: ブラウザから `http://<pi-gallery-host>:<port>/info/<some-id>` が JSON で返ることを確認してください。
-- **WallPaper Engine での配置**: 本フォルダを Wallpaper Engine のプロジェクトとして読み込みます（`index.html` と `app.js` があるディレクトリ）。
+- **WallPaper Engine での配置**: 本フォルダを Wallpaper Engine のプロジェクトフォルダに配置します（C:\Program Files (x86)\Steam\steamapps\common\wallpaper_engine\projects\myprojects\shuffle-gallery-wpe）。
 
 **設定**
 
 - **API エンドポイント変更**: バックエンドのホスト/ポートを変更する場合は `app.js` 内の先頭付近にある `convertinfoapiurl` を書き換えてください。
 	- 例: `const convertinfoapiurl = 'http://192.168.1.10:8000/info/';`
-- **表示設定**: オーバーレイ表示やメタデータ表示は画面右上の設定ボタン（`index.html` の UI）で切り替えられます。
- - **表示設定**: オーバーレイ表示やメタデータ表示は画面左上の設定ボタン（`index.html` の UI）で切り替えられます。
+- **表示設定**: オーバーレイ表示やメタデータ表示は画面左上の設定ボタン（`index.html` の UI）で切り替えられます。
 
 **使い方**
 
