@@ -14,7 +14,7 @@ const NO_DATA_RETRY_MS = 3000; // wait when no data fetched
 const ANIMATION_DISPLAY_MS = 10000; // display time for animated content
 const STATIC_DISPLAY_MS = 11000; // display time for static images
 const VIDEO_SHORT_FALLBACK_MS = 10000; // fallback wait for very short/unknown videos
-const MIN_VIDEO_DISPLAY_MS = 5000; // minimum wait for videos
+const MIN_VIDEO_DISPLAY_MS = 10000; // minimum wait for videos
 const VIDEO_META_PAD_MS = 1000; // padding when calculating video wait
 
 // Pan animation state (weak map to avoid leaks)
@@ -144,6 +144,26 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         mainImage = imgMain1;
         randomVideo = vidBg1;
         randomVideoLarge = vidMain1;
+        // Ensure background videos will restart if they unexpectedly end
+        try {
+            if (randomVideo) {
+                randomVideo.loop = true;
+                randomVideo.addEventListener('ended', () => {
+                    try { randomVideo.currentTime = 0; randomVideo.play().catch(() => {}); } catch (e) { /* ignore */ }
+                });
+            }
+            if (randomVideoLarge) {
+                randomVideoLarge.addEventListener('ended', () => {
+                    try {
+                        // hide the front video when it ends and ensure background plays
+                        randomVideoLarge.classList.remove('visible');
+                        randomVideoLarge.currentTime = 0;
+                        try { randomVideoLarge.pause(); } catch (e) { /* ignore */ }
+                        if (randomVideo && randomVideo.paused) randomVideo.play().catch(() => {});
+                    } catch (e) { /* ignore */ }
+                });
+            }
+        } catch (e) { /* ignore */ }
         exifToggleButton = document.getElementById('exif-toggle');
         exifContainer = document.getElementById('exif-container');
         exifTextP = document.getElementById('exif-text-p');
@@ -682,6 +702,14 @@ function applyImageBackground(imageUrl, is_animation, posX) {
         if (randomVideoLarge && !randomVideoLarge.paused) { randomVideoLarge.pause(); }
     } catch (e) { /* ignore */ }
 
+    // Ensure image elements are unhidden when showing images (robust for both sets)
+    try {
+        [imgBg1, imgMain1, imgBg2, imgMain2].forEach(el => {
+            if (!el) return;
+            try { el.hidden = false; } catch (e) { /* ignore */ }
+        });
+    } catch (e) { /* ignore */ }
+
     // If elements are missing, nothing to do
     if (!randomImage && !mainImage) return;
 
@@ -788,35 +816,73 @@ async function showVideoFromUrl(mediaUrl) {
     if (!randomVideo || !randomVideoLarge) return;
     // Use background video as looping cover, and main video as front play
     try {
+        // Ensure video elements are visible/unhidden when switching from images
+        try { if (randomVideo) randomVideo.hidden = false; } catch (e) { /* ignore */ }
+        try { if (randomVideoLarge) randomVideoLarge.hidden = false; } catch (e) { /* ignore */ }
+
+        // Hide all image elements to avoid leftover image visibility during transition
+        try {
+            [imgBg1, imgMain1, imgBg2, imgMain2].forEach(el => {
+                if (!el) return;
+                try { el.classList.remove('visible'); } catch (e) { /* ignore */ }
+                try { el.hidden = true; } catch (e) { /* ignore */ }
+                try { cancelPan(el); } catch (e) { /* ignore */ }
+            });
+        } catch (e) { /* ignore */ }
+
         randomVideo.src = mediaUrl;
         randomVideo.loop = true;
         randomVideo.muted = true;
         randomVideo.classList.add('visible');
-        try { await randomVideo.play(); } catch (e) { /* ignore autoplay errors */ }
+        try { randomVideo.load(); await randomVideo.play(); } catch (e) { /* ignore autoplay errors */ }
 
         randomVideoLarge.src = mediaUrl;
         randomVideoLarge.loop = false;
         randomVideoLarge.muted = true;
         // front video plays once
         randomVideoLarge.classList.remove('visible');
-        try { await randomVideoLarge.play(); } catch (e) { /* ignore */ }
+        try { randomVideoLarge.load(); await randomVideoLarge.play(); } catch (e) { /* ignore */ }
         // fade in front video
         requestAnimationFrame(() => { randomVideoLarge.classList.add('visible'); });
 
         // hide images
-        if (randomImage) randomImage.classList.remove('visible');
-        if (mainImage) mainImage.classList.remove('visible');
+        try {
+            [imgBg1, imgMain1, imgBg2, imgMain2].forEach(el => { if (el) { try { el.classList.remove('visible'); } catch (e){} } });
+        } catch (e) { /* ignore */ }
 
-        // wait for duration similar to previous logic
+        // wait for metadata then decide whether the front video should loop
         await _sleep(VIDEO_METADATA_WAIT_MS);
         const dur = Number(randomVideoLarge.duration) || 0;
-        if (!dur || isNaN(dur) || dur <= 0) {
-            await _sleep(VIDEO_SHORT_FALLBACK_MS);
-        } else if (dur < 5) {
-            await _sleep(VIDEO_SHORT_FALLBACK_MS);
+        const durMs = Math.round((dur || 0) * 1000);
+        if (!dur || isNaN(dur) || durMs <= 0) {
+            // unknown duration -> treat as short: loop front until minimum display time
+            try { randomVideoLarge.loop = true; } catch (e) { /* ignore */ }
+            await _sleep(MIN_VIDEO_DISPLAY_MS);
+            try {
+                randomVideoLarge.loop = false;
+                randomVideoLarge.classList.remove('visible');
+                randomVideoLarge.currentTime = 0;
+                randomVideoLarge.pause();
+            } catch (e) { /* ignore */ }
+        } else if (durMs < MIN_VIDEO_DISPLAY_MS) {
+            // short clip -> loop front until minimum display time reached
+            try { randomVideoLarge.loop = true; } catch (e) { /* ignore */ }
+            await _sleep(MIN_VIDEO_DISPLAY_MS);
+            try {
+                randomVideoLarge.loop = false;
+                randomVideoLarge.classList.remove('visible');
+                randomVideoLarge.currentTime = 0;
+                randomVideoLarge.pause();
+            } catch (e) { /* ignore */ }
         } else {
-            const waitMs = Math.max(MIN_VIDEO_DISPLAY_MS, dur * 2000 - VIDEO_META_PAD_MS);
+            // sufficiently long: play once but ensure at least MIN_VIDEO_DISPLAY_MS
+            const waitMs = Math.max(MIN_VIDEO_DISPLAY_MS, durMs - VIDEO_META_PAD_MS);
             await _sleep(waitMs);
+            try {
+                randomVideoLarge.classList.remove('visible');
+                randomVideoLarge.currentTime = 0;
+                randomVideoLarge.pause();
+            } catch (e) { /* ignore */ }
         }
     } catch (e) {
         console.warn('showVideoFromUrl failed', e);
