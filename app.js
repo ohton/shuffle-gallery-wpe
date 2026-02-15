@@ -98,6 +98,8 @@ let randomImage = null;
 let mainImage = null;
 let randomVideo = null;
 let randomVideoLarge = null;
+// temporary flag: when true, front video should keep looping (short clips)
+let frontTempLoop = false;
 // Two sets of elements for crossfade
 let imgBg1 = null;
 let imgMain1 = null;
@@ -155,6 +157,11 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             if (randomVideoLarge) {
                 randomVideoLarge.addEventListener('ended', () => {
                     try {
+                        // If we're temporarily looping short clips, resume play instead
+                        if (frontTempLoop) {
+                            try { randomVideoLarge.play().catch(() => {}); } catch (e) { /* ignore */ }
+                            return;
+                        }
                         // hide the front video when it ends and ensure background plays
                         randomVideoLarge.classList.remove('visible');
                         randomVideoLarge.currentTime = 0;
@@ -749,8 +756,21 @@ function applyImageBackground(imageUrl, is_animation, posX) {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     // Fade in new set
-                    if (nextBg) nextBg.classList.add('visible');
-                    if (nextMain) nextMain.classList.add('visible');
+                            if (nextBg) nextBg.classList.add('visible');
+                            if (nextMain) nextMain.classList.add('visible');
+                            // Ensure any playing videos are fully stopped/hidden when images show
+                            try {
+                                [vidBg1, vidMain1, vidBg2, vidMain2, randomVideo, randomVideoLarge].forEach(v => {
+                                    if (!v) return;
+                                    try { v.classList.remove('visible'); } catch (e) { /* ignore */ }
+                                    try { v.pause(); } catch (e) { /* ignore */ }
+                                    try { v.currentTime = 0; } catch (e) { /* ignore */ }
+                                    try { v.src = ''; } catch (e) { /* ignore */ }
+                                    try { v.hidden = true; } catch (e) { /* ignore */ }
+                                    try { v.style.filter = ''; } catch (e) { /* ignore */ }
+                                    try { v.style.zIndex = ''; } catch (e) { /* ignore */ }
+                                });
+                            } catch (e) { /* ignore */ }
                     // Fade out old set
                     if (prevBg) prevBg.classList.remove('visible');
                     if (prevMain) prevMain.classList.remove('visible');
@@ -787,6 +807,17 @@ function applyImageBackground(imageUrl, is_animation, posX) {
                 nextMain.classList.add('visible');
             }
             if (prevBg) { prevBg.classList.remove('visible'); try { cancelPan(prevBg); } catch (e) { /* ignore */ } }
+            // Ensure videos are stopped/hidden on image fallback as well
+            try {
+                [vidBg1, vidMain1, vidBg2, vidMain2, randomVideo, randomVideoLarge].forEach(v => {
+                    if (!v) return;
+                    try { v.classList.remove('visible'); } catch (e) { /* ignore */ }
+                    try { v.pause(); } catch (e) { /* ignore */ }
+                    try { v.currentTime = 0; } catch (e) { /* ignore */ }
+                    try { v.src = ''; } catch (e) { /* ignore */ }
+                    try { v.hidden = true; } catch (e) { /* ignore */ }
+                });
+            } catch (e) { /* ignore */ }
             if (nextBg && !is_animation) {
                 // best-effort: assume vertical pan on error fallback
                 try { nextBg.style.objectPosition = '50% 100%'; startPan(nextBg, STATIC_DISPLAY_MS, 'vertical'); } catch (e) { /* ignore */ }
@@ -834,14 +865,46 @@ async function showVideoFromUrl(mediaUrl) {
         randomVideo.loop = true;
         randomVideo.muted = true;
         randomVideo.classList.add('visible');
-        try { randomVideo.load(); await randomVideo.play(); } catch (e) { /* ignore autoplay errors */ }
+        try {
+            // Ensure background video keeps blur and sits under the front video
+            try { randomVideo.style.filter = `blur(${BG_BLUR_PX}px)`; } catch (e) { /* ignore */ }
+            try { randomVideo.style.zIndex = 1000; } catch (e) { /* ignore */ }
+            randomVideo.load();
+            await randomVideo.play();
+        } catch (e) { /* ignore autoplay errors */ }
 
         randomVideoLarge.src = mediaUrl;
         randomVideoLarge.loop = false;
         randomVideoLarge.muted = true;
         // front video plays once
         randomVideoLarge.classList.remove('visible');
-        try { randomVideoLarge.load(); await randomVideoLarge.play(); } catch (e) { /* ignore */ }
+        // Immediately inspect metadata when available and decide
+        // whether to enable a temporary loop for very short clips.
+        let _metaListener = null;
+        _metaListener = () => {
+            try {
+                const d = Number(randomVideoLarge.duration) || 0;
+                const dMs = Math.round((d || 0) * 1000);
+                if (!d || isNaN(d) || dMs === 0 || dMs < MIN_VIDEO_DISPLAY_MS) {
+                    frontTempLoop = true;
+                    try { randomVideoLarge.loop = true; } catch (e) { /* ignore */ }
+                } else {
+                    frontTempLoop = false;
+                    try { randomVideoLarge.loop = false; } catch (e) { /* ignore */ }
+                }
+                // ensure playback starts as soon as possible for short clips
+                try { randomVideoLarge.play().catch(() => {}); } catch (e) { /* ignore */ }
+            } catch (e) { /* ignore */ }
+            try { randomVideoLarge.removeEventListener('loadedmetadata', _metaListener); } catch (e) { /* ignore */ }
+        };
+        try { randomVideoLarge.addEventListener('loadedmetadata', _metaListener); } catch (e) { /* ignore */ }
+        try {
+            // Ensure front video has no blur and sits above the background
+            try { randomVideoLarge.style.filter = 'none'; } catch (e) { /* ignore */ }
+            try { randomVideoLarge.style.zIndex = 1001; } catch (e) { /* ignore */ }
+            randomVideoLarge.load();
+            await randomVideoLarge.play();
+        } catch (e) { /* ignore */ }
         // fade in front video
         requestAnimationFrame(() => { randomVideoLarge.classList.add('visible'); });
 
@@ -855,33 +918,43 @@ async function showVideoFromUrl(mediaUrl) {
         const dur = Number(randomVideoLarge.duration) || 0;
         const durMs = Math.round((dur || 0) * 1000);
         if (!dur || isNaN(dur) || durMs <= 0) {
-            // unknown duration -> treat as short: loop front until minimum display time
-            try { randomVideoLarge.loop = true; } catch (e) { /* ignore */ }
+            // unknown duration -> treat as short: ensure temp-loop is enabled
+            if (!frontTempLoop) {
+                try { randomVideoLarge.loop = true; frontTempLoop = true; } catch (e) { /* ignore */ }
+            }
             await _sleep(MIN_VIDEO_DISPLAY_MS);
             try {
+                frontTempLoop = false;
                 randomVideoLarge.loop = false;
                 randomVideoLarge.classList.remove('visible');
                 randomVideoLarge.currentTime = 0;
                 randomVideoLarge.pause();
+                try { randomVideoLarge.hidden = true; } catch (e) { /* ignore */ }
             } catch (e) { /* ignore */ }
         } else if (durMs < MIN_VIDEO_DISPLAY_MS) {
-            // short clip -> loop front until minimum display time reached
-            try { randomVideoLarge.loop = true; } catch (e) { /* ignore */ }
+            // short clip -> ensure temp-loop is enabled immediately
+            if (!frontTempLoop) {
+                try { randomVideoLarge.loop = true; frontTempLoop = true; } catch (e) { /* ignore */ }
+            }
             await _sleep(MIN_VIDEO_DISPLAY_MS);
             try {
+                frontTempLoop = false;
                 randomVideoLarge.loop = false;
                 randomVideoLarge.classList.remove('visible');
                 randomVideoLarge.currentTime = 0;
                 randomVideoLarge.pause();
+                try { randomVideoLarge.hidden = true; } catch (e) { /* ignore */ }
             } catch (e) { /* ignore */ }
         } else {
             // sufficiently long: play once but ensure at least MIN_VIDEO_DISPLAY_MS
             const waitMs = Math.max(MIN_VIDEO_DISPLAY_MS, durMs - VIDEO_META_PAD_MS);
             await _sleep(waitMs);
             try {
+                frontTempLoop = false;
                 randomVideoLarge.classList.remove('visible');
                 randomVideoLarge.currentTime = 0;
                 randomVideoLarge.pause();
+                try { randomVideoLarge.hidden = true; } catch (e) { /* ignore */ }
             } catch (e) { /* ignore */ }
         }
     } catch (e) {
