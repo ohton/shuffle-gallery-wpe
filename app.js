@@ -986,9 +986,9 @@ let cycleMedia = async () => {
             return 'no-data';
         }
 
-        // remove pre-display overlay handling — overlay will be shown
-        // immediately after media is applied so it represents the shown item
-        hideInfoNameOverlay();
+        // Note: do not hide the overlay here — keep overlay visibility
+        // controlled by the user's setting so it doesn't flicker during
+        // media crossfades/transitions.
 
         // Prefer file type inferred from info API
         let fileType = abFileTypeFromInfo;
@@ -1061,8 +1061,10 @@ let cycleMedia = async () => {
             currentInfoMetadata = infoMetadata;
             currentMediaUrl = bgimgurl;
             await showVideoFromUrl(bgimgurl);
-            // show overlay for videos if enabled
-            if (showInfoOverlayEnabled && (currentInfoName || (Array.isArray(currentInfoKeywords) && currentInfoKeywords.length))) {
+            // show overlay for videos according to user setting — keep overlay
+            // visible when enabled so it doesn't blink away for items without
+            // metadata during transitions.
+            if (showInfoOverlayEnabled) {
                 showInfoNameOverlay(currentInfoName, currentInfoKeywords);
             } else {
                 hideInfoNameOverlay();
@@ -1078,7 +1080,8 @@ let cycleMedia = async () => {
 
         // show overlay after applying image so it reflects the shown media
         if (!fileType || fileType !== 'video') {
-            if (showInfoOverlayEnabled && (currentInfoName || (Array.isArray(currentInfoKeywords) && currentInfoKeywords.length))) {
+            // For images, keep overlay visible when the user enabled it.
+            if (showInfoOverlayEnabled) {
                 showInfoNameOverlay(currentInfoName, currentInfoKeywords);
             } else {
                 hideInfoNameOverlay();
