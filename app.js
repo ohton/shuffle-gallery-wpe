@@ -948,7 +948,7 @@ async function showVideoFromUrl(mediaUrl) {
             if (!frontTempLoop) {
                 try { randomVideoLarge.loop = true; frontTempLoop = true; } catch (e) { /* ignore */ }
             }
-            await _sleep(VIDEO_SHORT_FALLBACK_MS);
+            await _sleep(MIN_VIDEO_DISPLAY_MS);
             try {
                 frontTempLoop = false;
                 randomVideoLarge.loop = false;
