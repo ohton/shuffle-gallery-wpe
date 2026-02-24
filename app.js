@@ -13,9 +13,11 @@ const VIDEO_METADATA_WAIT_MS = 1000; // wait for video metadata
 const NO_DATA_RETRY_MS = 3000; // wait when no data fetched
 const ANIMATION_DISPLAY_MS = 10000; // display time for animated content
 const STATIC_DISPLAY_MS = 11000; // display time for static images
-const VIDEO_SHORT_FALLBACK_MS = 10000; // fallback wait for very short/unknown videos
+const VIDEO_SHORT_FALLBACK_MS = 3000; // fallback wait for very short/unknown videos
 const MIN_VIDEO_DISPLAY_MS = 10000; // minimum wait for videos
 const VIDEO_META_PAD_MS = 1000; // padding when calculating video wait
+// Toggle for video URL mode: true uses transcoded /bestFit, false uses raw
+const USE_VIDEO_BEST_FIT = false;
 
 // Pan animation state (weak map to avoid leaks)
 const panRafIds = new WeakMap();
@@ -304,11 +306,21 @@ function buildMediaUrlFromInfo(infoUrl, infoResult) {
                 }
                 return `${origin}/pgapi/gallery/content/${encoded}/1080`;
             }
+            if (videoExts.includes(ext)) {
+                return USE_VIDEO_BEST_FIT
+                    ? `${origin}/pgapi/gallery/content/${encoded}/bestFit`
+                    : `${origin}/pgapi/gallery/content/${encoded}`;
+            }
         } catch (e) {
             // if metadata inspection fails, fall back to converted variant for images
             if (imageExts.includes(ext) && !videoExts.includes(ext)) {
                 return `${origin}/pgapi/gallery/content/${encoded}/1080`;
             }
+        }
+        if (videoExts.includes(ext)) {
+            return USE_VIDEO_BEST_FIT
+                ? `${origin}/pgapi/gallery/content/${encoded}/bestFit`
+                : `${origin}/pgapi/gallery/content/${encoded}`;
         }
         return `${origin}/pgapi/gallery/content/${encoded}`;
     } catch (e) {
@@ -922,7 +934,7 @@ async function showVideoFromUrl(mediaUrl) {
             if (!frontTempLoop) {
                 try { randomVideoLarge.loop = true; frontTempLoop = true; } catch (e) { /* ignore */ }
             }
-            await _sleep(MIN_VIDEO_DISPLAY_MS);
+            await _sleep(VIDEO_SHORT_FALLBACK_MS);
             try {
                 frontTempLoop = false;
                 randomVideoLarge.loop = false;
@@ -936,7 +948,7 @@ async function showVideoFromUrl(mediaUrl) {
             if (!frontTempLoop) {
                 try { randomVideoLarge.loop = true; frontTempLoop = true; } catch (e) { /* ignore */ }
             }
-            await _sleep(MIN_VIDEO_DISPLAY_MS);
+            await _sleep(VIDEO_SHORT_FALLBACK_MS);
             try {
                 frontTempLoop = false;
                 randomVideoLarge.loop = false;
