@@ -618,47 +618,57 @@ async function preloadImages(commit = true) {
         try {
             const ciRes = await fetchWithRetry(convertinfoapiurl, {});
             const ciJson = await ciRes.json();
-            const infoUrl = ciJson && ciJson.url;
-            if (infoUrl) {
-                const infoRes = await fetchWithRetry(infoUrl, {});
-                const infoJson = await infoRes.json();
-                const infoResult = infoJson && infoJson.result;
-                if (infoResult) {
-                    // determine file type from name
-                    const name = infoResult.name || '';
-                    const ext = (name.split('.').pop() || '').toLowerCase();
-                    if (ext === 'jpg' || ext === 'jpeg') _abFileTypeFromInfo = 'JPG';
-                    else if (ext === 'png') _abFileTypeFromInfo = 'PNG';
-                    else if (ext === 'gif') _abFileTypeFromInfo = 'GIF';
-                    else if (ext === 'heic') _abFileTypeFromInfo = 'JPG';
-                    else if (['mp4','webm','ogg','mkv'].includes(ext)) _abFileTypeFromInfo = 'video';
-                    else _abFileTypeFromInfo = null;
+        let infoUrl = null;
+        let infoResult = null;
 
-                    // store metadata/keywords for later decisions (skip keywords containing '|')
-                    _infoMetadata = infoResult.metadata || null;
-                    const rawKeywords = (_infoMetadata && _infoMetadata.keywords) || [];
-                    _infoKeywords = rawKeywords.filter(k => typeof k === 'string' && k.indexOf('|') === -1).map(k => k.trim().toLowerCase());
+        // Support both:
+        // 1. Direct info response (e.g. /pgapi/gallery/random/shuffle/info or /info): { result: { id, name, directory, ... } }
+        // 2. Legacy nested response: { url: "http://.../pgapi/gallery/random/.../info" }
+        if (ciJson && ciJson.result) {
+            infoUrl = convertinfoapiurl;
+            infoResult = ciJson.result;
+        } else if (ciJson && ciJson.url) {
+            infoUrl = ciJson.url;
+            const infoRes = await fetchWithRetry(infoUrl, {});
+            const infoJson = await infoRes.json();
+            infoResult = infoJson && infoJson.result;
+        }
 
-                    const mediaUrl = buildMediaUrlFromInfo(infoUrl, infoResult);
-                    if (mediaUrl) {
-                            // If we still didn't infer type, try to detect HEIC from name or url (robust against uppercase)
-                            if (!_abFileTypeFromInfo) {
-                                try {
-                                    const nameIsHeic = /\.heic$/i.test(infoResult.name || '');
-                                    const urlHasHeic = /\.heic/i.test(mediaUrl);
-                                    if (nameIsHeic || urlHasHeic || mediaUrl.endsWith('/1080')) {
-                                        _abFileTypeFromInfo = 'JPG';
-                                    }
-                                } catch (e) {
-                                    // ignore
-                                }
+        if (infoResult) {
+            // determine file type from name
+            const name = infoResult.name || '';
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            if (ext === 'jpg' || ext === 'jpeg') _abFileTypeFromInfo = 'JPG';
+            else if (ext === 'png') _abFileTypeFromInfo = 'PNG';
+            else if (ext === 'gif') _abFileTypeFromInfo = 'GIF';
+            else if (ext === 'heic') _abFileTypeFromInfo = 'JPG';
+            else if (['mp4','webm','ogg','mkv'].includes(ext)) _abFileTypeFromInfo = 'video';
+            else _abFileTypeFromInfo = null;
+
+            // store metadata/keywords for later decisions (skip keywords containing '|')
+            _infoMetadata = infoResult.metadata || null;
+            const rawKeywords = (_infoMetadata && _infoMetadata.keywords) || [];
+            _infoKeywords = rawKeywords.filter(k => typeof k === 'string' && k.indexOf('|') === -1).map(k => k.trim().toLowerCase());
+
+            const mediaUrl = buildMediaUrlFromInfo(infoUrl, infoResult);
+            if (mediaUrl) {
+                    // If we still didn't infer type, try to detect HEIC from name or url (robust against uppercase)
+                    if (!_abFileTypeFromInfo) {
+                        try {
+                            const nameIsHeic = /\.heic$/i.test(infoResult.name || '');
+                            const urlHasHeic = /\.heic/i.test(mediaUrl);
+                            if (nameIsHeic || urlHasHeic || mediaUrl.endsWith('/1080')) {
+                                _abFileTypeFromInfo = 'JPG';
                             }
-                        _bgimgurl = mediaUrl;
-                        _infoItemName = infoResult.name || null;
-                        _infoUsed = true;
+                        } catch (e) {
+                            // ignore
+                        }
                     }
-                }
+                _bgimgurl = mediaUrl;
+                _infoItemName = infoResult.name || null;
+                _infoUsed = true;
             }
+        }
         } catch (ie) {
             console.warn('preloadImages: info-based flow failed, falling back', ie);
         }
